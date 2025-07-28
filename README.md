@@ -233,7 +233,7 @@ SELECT cloudsync_terminate();
 
 ### For a Complete Example
 
-See the [Simple Todo Database example](./examples/simple-todo-db/) for a comprehensive walkthrough including:
+See the [examples](./examples/simple-todo-db/) directory for a comprehensive walkthrough including:
 - Multi-device collaboration
 - Offline scenarios  
 - Row-level security setup
