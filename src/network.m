@@ -147,15 +147,20 @@ NETWORK_RESULT network_receive_buffer(network_data *data, const char *endpoint, 
     }
 
     __block NSData *responseData = nil;
-    __block NSError *responseError = nil;
+    __block NSString *responseError = nil;
     __block NSInteger statusCode = 0;
+    __block NSInteger errorCode = 0;
 
     dispatch_semaphore_t sema = dispatch_semaphore_create(0);
 
     NSURLSession *session = [NSURLSession sharedSession];
     NSURLSessionDataTask *task = [session dataTaskWithRequest:request completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-        responseData = data;
-        responseError = error;
+        // Retain data to not get it deallocated, release it before returning
+        responseData = [data retain];
+        if (error) {
+            responseError = [error localizedDescription];
+            errorCode = [error code];
+        }
         if ([response isKindOfClass:[NSHTTPURLResponse class]]) {
             statusCode = [(NSHTTPURLResponse *)response statusCode];
         }
@@ -168,7 +173,10 @@ NETWORK_RESULT network_receive_buffer(network_data *data, const char *endpoint, 
     if (!responseError && (statusCode >= 200 && statusCode < 300)) {
         size_t len = [responseData length];
         // check if OK should be returned
-        if (len == 0) return (NETWORK_RESULT){CLOUDSYNC_NETWORK_OK, NULL, 0, NULL, NULL};
+        if (len == 0) {
+            [responseData release];
+            return (NETWORK_RESULT){CLOUDSYNC_NETWORK_OK, NULL, 0, NULL, NULL};
+        }
         
         // otherwise return a buffer
         NETWORK_RESULT result = {};
@@ -183,19 +191,21 @@ NETWORK_RESULT network_receive_buffer(network_data *data, const char *endpoint, 
         }
         result.blen = len;
         result.xfree = network_buffer_cleanup;
+        
+        [responseData release];
         return result;
     }
     
     // return error
     NETWORK_RESULT result = {};
-    NSString *msg;
+    NSString *msg = nil;
     if (responseError) {
-        msg = [responseError localizedDescription];
+        msg = responseError;
     } else if (responseData && [responseData length] > 0) {
         // Use the actual response body as the error message
         msg = [[NSString alloc] initWithData:responseData encoding:NSUTF8StringEncoding];
         if (!msg) {
-            msg = [NSString stringWithCString:"Invalid error response encoding" encoding:NSUTF8StringEncoding];
+            msg = [NSString stringWithFormat:@"HTTP %ld error", (long)statusCode];
         }
     } else {
         msg = [NSString stringWithFormat:@"HTTP %ld error", (long)statusCode];
@@ -204,6 +214,8 @@ NETWORK_RESULT network_receive_buffer(network_data *data, const char *endpoint, 
     result.buffer = (char *)msg.UTF8String;
     result.xdata = (void *)CFBridgingRetain(msg);
     result.xfree = network_buffer_cleanup;
-    result.blen = (responseError) ? (size_t)responseError.code : (size_t)statusCode;
+    result.blen = responseError ? (size_t)errorCode : (size_t)statusCode;
+    
+    [responseData release];
     return result;
 }
