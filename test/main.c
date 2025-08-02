@@ -1,6 +1,6 @@
 //
 //  main.c
-//  sqlite-sync
+//  cloudsync
 //
 //  Created by Gioele Cantoni on 05/06/25.
 //  Set CONNECTION_STRING, APIKEY and WEBLITE environment variables before running this test.

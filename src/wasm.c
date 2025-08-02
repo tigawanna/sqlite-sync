@@ -1,3 +1,10 @@
+//
+//  wasm.c
+//  cloudsync
+//
+//  Created by Gioele Cantoni on 25/06/25.
+//
+
 #ifdef SQLITE_WASM_EXTRA_INIT
 #define CLOUDSYNC_OMIT_CURL
 
