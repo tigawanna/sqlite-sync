@@ -358,6 +358,7 @@ void* worker(void* arg) {
 
 int main (void) {
     int rc = SQLITE_OK;
+    remove(DB_PATH); // remove the database file if it exists
     
     cloudsync_memory_init(1);
     
