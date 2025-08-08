@@ -229,11 +229,11 @@ endif
 	mkdir -p $(CURL_DIR)/src
 	curl -L -o $(CURL_DIR)/src/curl.zip "https://github.com/curl/curl/releases/download/curl-$(subst .,_,${CURL_VERSION})/curl-$(CURL_VERSION).zip"
 
-	ifeq ($(HOST),windows)
+ifeq ($(HOST),windows)
 	powershell -Command "Expand-Archive -Path '$(CURL_DIR)\src\curl.zip' -DestinationPath '$(CURL_DIR)\src\'"
-	else
+else
 	unzip $(CURL_DIR)/src/curl.zip -d $(CURL_DIR)/src/.
-	endif
+endif
 	
 	cd $(CURL_SRC) && ./configure \
 	--without-libpsl \
