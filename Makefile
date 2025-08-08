@@ -321,7 +321,7 @@ define PLIST
 <key>CFBundleDevelopmentRegion</key>\
 <string>en</string>\
 <key>CFBundleExecutable</key>\
-<string>cloudsync</string>\
+<string>CloudSync</string>\
 <key>CFBundleIdentifier</key>\
 <string>ai.sqlite.cloudsync</string>\
 <key>CFBundleInfoDictionaryVersion</key>\
@@ -347,10 +347,11 @@ $(DIST_DIR)/%.xcframework: $(LIB_NAMES)
 		lib=$(word $(i),$(LIB_NAMES)); \
 		fmwk=$(word $(i),$(FMWK_NAMES)); \
 		mkdir -p $(DIST_DIR)/$$fmwk/CloudSync.framework/Headers; \
-		cp src/cloudsync.h src/sqlite3ext.h $(DIST_DIR)/$$fmwk/CloudSync.framework/Headers/; \
+		cp src/sqlite3ext.h $(DIST_DIR)/$$fmwk/CloudSync.framework/Headers/; \
+		cp src/cloudsync.h $(DIST_DIR)/$$fmwk/CloudSync.framework/Headers/CloudSync.h; \
 		printf "$(PLIST)" > $(DIST_DIR)/$$fmwk/CloudSync.framework/Info.plist; \
-		mv $(DIST_DIR)/$$lib $(DIST_DIR)/$$fmwk/CloudSync.framework/cloudsync; \
-		install_name_tool -id "@rpath/CloudSync.framework/cloudsync" $(DIST_DIR)/$$fmwk/CloudSync.framework/cloudsync; \
+		mv $(DIST_DIR)/$$lib $(DIST_DIR)/$$fmwk/CloudSync.framework/CloudSync; \
+		install_name_tool -id "@rpath/CloudSync.framework/CloudSync" $(DIST_DIR)/$$fmwk/CloudSync.framework/CloudSync; \
 	)
 	xcodebuild -create-xcframework $(foreach fmwk,$(FMWK_NAMES),-framework $(DIST_DIR)/$(fmwk)/CloudSync.framework) -output $@
 	rm -rf $(foreach fmwk,$(FMWK_NAMES),$(DIST_DIR)/$(fmwk))
