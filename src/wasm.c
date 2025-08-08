@@ -14,7 +14,7 @@
 #include <emscripten/emscripten.h>
 
 #include "sqlite3.h"
-#include "netword_private.h"
+#include "network_private.h"
 
 #include "utils.c"
 #include "network.c"

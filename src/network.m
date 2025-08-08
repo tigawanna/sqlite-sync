@@ -7,7 +7,7 @@
 
 #import <Foundation/Foundation.h>
 #include "network.h"
-#include "netword_private.h"
+#include "network_private.h"
 
 void network_buffer_cleanup (void *xdata) {
     if (xdata) CFRelease(xdata);

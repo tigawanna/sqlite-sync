@@ -1,5 +1,5 @@
 //
-//  netword_private.h
+//  network_private.h
 //  cloudsync
 //
 //  Created by Marco Bambini on 23/05/25.

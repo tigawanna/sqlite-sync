@@ -12,7 +12,7 @@
 #include "dbutils.h"
 #include "utils.h"
 #include "cloudsync_private.h"
-#include "netword_private.h"
+#include "network_private.h"
 
 #ifndef SQLITE_WASM_EXTRA_INIT
 #ifndef CLOUDSYNC_OMIT_CURL
