@@ -3169,12 +3169,7 @@ rollback_finalize_alter:
     
 // MARK: - Main Entrypoint -
 
-APIEXPORT int sqlite3_cloudsync_init (sqlite3 *db, char **pzErrMsg, const sqlite3_api_routines *pApi) {
-    DEBUG_FUNCTION("sqlite3_cloudsync_init");
-    
-    #ifndef SQLITE_CORE
-    SQLITE_EXTENSION_INIT2(pApi);
-    #endif
+int cloudsync_register (sqlite3 *db, char **pzErrMsg) {
     int rc = SQLITE_OK;
     
     // there's no built-in way to verify if sqlite3_cloudsync_init has already been called
@@ -3305,5 +3300,15 @@ APIEXPORT int sqlite3_cloudsync_init (sqlite3 *db, char **pzErrMsg, const sqlite
     }
     
     return SQLITE_OK;
+}
+
+APIEXPORT int sqlite3_cloudsync_init (sqlite3 *db, char **pzErrMsg, const sqlite3_api_routines *pApi) {
+    DEBUG_FUNCTION("sqlite3_cloudsync_init");
+    
+    #ifndef SQLITE_CORE
+    SQLITE_EXTENSION_INIT2(pApi);
+    #endif
+    
+    return cloudsync_register(db, pzErrMsg);
 }
 

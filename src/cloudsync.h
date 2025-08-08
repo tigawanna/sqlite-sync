@@ -16,8 +16,17 @@
 #include "sqlite3.h"
 #endif
 
-#define CLOUDSYNC_VERSION                       "0.8.22"
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define CLOUDSYNC_VERSION                       "0.8.23"
 
 int sqlite3_cloudsync_init (sqlite3 *db, char **pzErrMsg, const sqlite3_api_routines *pApi);
+int cloudsync_register (sqlite3 *db, char **pzErrMsg);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
