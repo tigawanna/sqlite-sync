@@ -3169,6 +3169,10 @@ rollback_finalize_alter:
     
 // MARK: - Main Entrypoint -
 
+int cloudsync_autoinit (void) {
+    return sqlite3_auto_extension((void *)sqlite3_cloudsync_init);
+}
+
 int cloudsync_register (sqlite3 *db, char **pzErrMsg) {
     int rc = SQLITE_OK;
     
