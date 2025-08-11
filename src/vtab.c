@@ -160,8 +160,8 @@ char *build_changes_sql (sqlite3 *db, const char *idxs) {
     "        'SELECT tbl, pk, col_name, col_value, col_version, db_version, site_id, cl, seq FROM (' || union_query || ')' "
     "    AS final_string FROM union_query "
     ") "
-    "SELECT concat(final_string, ' ";
-    const char *final_query = ";') FROM final_query;";
+    "SELECT final_string || ' ";
+    const char *final_query = ";' FROM final_query;";
     
     static size_t query_len = 0;
     static size_t final_query_len = 0;

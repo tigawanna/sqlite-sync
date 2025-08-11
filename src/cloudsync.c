@@ -371,7 +371,7 @@ char *db_version_build_query (sqlite3 *db) {
                       "combined_query AS ("
                       "SELECT GROUP_CONCAT(part, ' UNION ALL ') || ' UNION SELECT value as version FROM cloudsync_settings WHERE key = ''pre_alter_dbversion''' as full_query FROM query_parts"
                       ") "
-                      "SELECT CONCAT('SELECT max(version) as version FROM (', full_query, ');') FROM combined_query;";
+                      "SELECT 'SELECT max(version) as version FROM (' || full_query || ');' FROM combined_query;";
     return dbutils_text_select(db, sql);
 }
 
