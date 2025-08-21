@@ -541,25 +541,55 @@ int dbutils_check_triggers (sqlite3 *db, const char *table, table_algo algo) {
         if (!trigger_name) goto finalize;
         
         if (!dbutils_trigger_exists(db, trigger_name)) {
-            char *sql = cloudsync_memory_mprintf("SELECT group_concat('NEW.\"' || format('%%w', name) || '\"', ',') || ',' || group_concat('OLD.\"' || format('%%w', name) || '\"', ',') FROM pragma_table_info('%q') WHERE pk>0 ORDER BY pk;", table);
-            if (!sql) goto finalize;
+            // Generate VALUES clause for all columns using a CTE to avoid compound SELECT limits
+            // First, get all primary key columns in order
+            char *pk_values_sql = cloudsync_memory_mprintf(
+                "SELECT group_concat('('||quote('%q')||', NEW.\"' || format('%%w', name) || '\", OLD.\"' || format('%%w', name) || '\")', ', ') "
+                "FROM pragma_table_info('%q') WHERE pk>0 ORDER BY pk;", 
+                table, table);
+            if (!pk_values_sql) goto finalize;
             
-            char *pkclause = dbutils_text_select(db, sql);
-            char *pkvalues = (pkclause) ? pkclause : "NEW.rowid,OLD.rowid";
-            cloudsync_memory_free(sql);
+            char *pk_values_list = dbutils_text_select(db, pk_values_sql);
+            cloudsync_memory_free(pk_values_sql);
             
-            sql = cloudsync_memory_mprintf("SELECT group_concat('NEW.\"' || format('%%w', name) || '\"' || ', OLD.\"' || format('%%w', name) || '\"', ',') FROM pragma_table_info('%q') WHERE pk=0 ORDER BY cid;", table);
-            if (!sql) goto finalize;
-            char *colvalues = dbutils_text_select(db, sql);
-            cloudsync_memory_free(sql);
+            // Then get all regular columns in order
+            char *col_values_sql = cloudsync_memory_mprintf(
+                "SELECT group_concat('('||quote('%q')||', NEW.\"' || format('%%w', name) || '\", OLD.\"' || format('%%w', name) || '\")', ', ') "
+                "FROM pragma_table_info('%q') WHERE pk=0 ORDER BY cid;", 
+                table, table);
+            if (!col_values_sql) goto finalize;
             
-            if (colvalues == NULL) {
-                sql = cloudsync_memory_mprintf("CREATE TRIGGER \"%w\" AFTER UPDATE ON \"%w\" %s BEGIN SELECT cloudsync_update('%q',%s); END", trigger_name, table, trigger_when, table, pkvalues);
+            char *col_values_list = dbutils_text_select(db, col_values_sql);
+            cloudsync_memory_free(col_values_sql);
+            
+            // Build the complete VALUES query
+            char *values_query;
+            if (col_values_list && strlen(col_values_list) > 0) {
+                // Table has both primary keys and regular columns
+                values_query = cloudsync_memory_mprintf(
+                    "WITH column_data(table_name, new_value, old_value) AS (VALUES %s, %s) "
+                    "SELECT table_name, new_value, old_value FROM column_data",
+                    pk_values_list, col_values_list);
+                cloudsync_memory_free(col_values_list);
             } else {
-                sql = cloudsync_memory_mprintf("CREATE TRIGGER \"%w\" AFTER UPDATE ON \"%w\" %s BEGIN SELECT cloudsync_update('%q',%s,%s); END", trigger_name, table, trigger_when, table, pkvalues, colvalues);
-                cloudsync_memory_free(colvalues);
+                // Table has only primary keys
+                values_query = cloudsync_memory_mprintf(
+                    "WITH column_data(table_name, new_value, old_value) AS (VALUES %s) "
+                    "SELECT table_name, new_value, old_value FROM column_data",
+                    pk_values_list);
             }
-            if (pkclause) cloudsync_memory_free(pkclause);
+            
+            if (pk_values_list) cloudsync_memory_free(pk_values_list);
+            if (!values_query) goto finalize;
+            
+            // Create the trigger with aggregate function
+            char *sql = cloudsync_memory_mprintf(
+                "CREATE TRIGGER \"%w\" AFTER UPDATE ON \"%w\" %s BEGIN "
+                "SELECT cloudsync_update(table_name, new_value, old_value) FROM (%s); "
+                "END", 
+                trigger_name, table, trigger_when, values_query);
+            
+            cloudsync_memory_free(values_query);
             if (!sql) goto finalize;
             
             rc = sqlite3_exec(db, sql, NULL, NULL, NULL);
