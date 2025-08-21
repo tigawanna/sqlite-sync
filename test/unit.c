@@ -1740,7 +1740,6 @@ bool do_test_dbutils (void) {
     "CREATE TABLE IF NOT EXISTS integer_pk (id INTEGER PRIMARY KEY NOT NULL, value);"
     "CREATE TABLE IF NOT EXISTS int_pk (id INT PRIMARY KEY NOT NULL, value);"
     "CREATE TABLE IF NOT EXISTS \"quoted table name 🚀\" (\"pk quoted col 1\" TEXT NOT NULL, \"pk quoted col 2\" TEXT NOT NULL, \"non pk quoted col 1\", \"non pk quoted col 2\", PRIMARY KEY (\"pk quoted col 1\", \"pk quoted col 2\"));";
-;
     
     rc = sqlite3_exec(db, sql, NULL, NULL, NULL);
     if (rc != SQLITE_OK) goto finalize;
@@ -2028,6 +2027,35 @@ bool do_test_string_replace_prefix(void) {
     replaced = cloudsync_string_replace_prefix(expected, prefix, replacement);
     if (expected != replaced) return false;
     
+    return true;
+}
+
+bool do_test_many_columns (int ncols, sqlite3 *db) {
+    char sql_create[10000];
+    int pos = 0;
+    pos += snprintf(sql_create+pos, sizeof(sql_create)-pos, "CREATE TABLE IF NOT EXISTS test_many_columns (id TEXT PRIMARY KEY NOT NULL");
+    for (int i=1; i<ncols; i++) {
+        pos += snprintf(sql_create+pos, sizeof(sql_create)-pos, ", col%d TEXT", i);
+    }
+    pos += snprintf(sql_create+pos, sizeof(sql_create)-pos, ");");
+
+    int rc = sqlite3_exec(db, sql_create, NULL, NULL, NULL);
+    if (rc != SQLITE_OK) return false;
+    
+    char *sql = "SELECT cloudsync_init('test_many_columns', 'cls', 1);";
+    rc = sqlite3_exec(db, sql, NULL, NULL, NULL);
+    if (rc != SQLITE_OK) return false;
+    
+    sql = sqlite3_mprintf("INSERT INTO test_many_columns (id, col1, col%d) VALUES ('test-id-1', 'original1', 'original%d');", ncols-1, ncols-1);
+    rc = sqlite3_exec(db, sql, NULL, NULL, NULL);
+    sqlite3_free(sql);
+    if (rc != SQLITE_OK) return false;
+
+    sql = sqlite3_mprintf("UPDATE test_many_columns SET col1 = 'updated1', col%d = 'updated%d' WHERE id = 'test-id-1';", ncols-1, ncols-1);
+    rc = sqlite3_exec(db, sql, NULL, NULL, NULL);
+    sqlite3_free(sql);
+    if (rc != SQLITE_OK) return false;
+   
     return true;
 }
 
@@ -2874,6 +2902,127 @@ finalize:
     return result;
 }
 
+bool do_test_merge_two_tables (int nclients, bool print_result, bool cleanup_databases) {
+    sqlite3 *db[MAX_SIMULATED_CLIENTS] = {NULL};
+    bool result = false;
+    int rc = SQLITE_OK;
+    int table_mask = TEST_PRIKEYS | TEST_NOCOLS;
+    
+    memset(db, 0, sizeof(sqlite3 *) * MAX_SIMULATED_CLIENTS);
+    if (nclients >= MAX_SIMULATED_CLIENTS) {
+        nclients = MAX_SIMULATED_CLIENTS;
+        printf("Number of test merge reduced to %d clients\n", MAX_SIMULATED_CLIENTS);
+    } else if (nclients < 2) {
+        nclients = 2;
+        printf("Number of test merge increased to %d clients\n", 2);
+    }
+    
+    // create databases and tables
+    time_t timestamp = time(NULL);
+    int saved_counter = test_counter;
+    for (int i=0; i<nclients; ++i) {
+        db[i] = do_create_database_file(i, timestamp, test_counter++);
+        if (db[i] == false) return false;
+        
+        if (do_create_tables(table_mask, db[i]) == false) {
+            return false;
+        }
+        
+        if (do_augment_tables(table_mask, db[i], table_algo_crdt_cls) == false) {
+            return false;
+        }
+    }
+    
+    // perform transactions on both tables in client 0
+    rc = sqlite3_exec(db[0], "BEGIN TRANSACTION;", NULL, NULL, NULL);
+    if (rc != SQLITE_OK) goto finalize;
+    
+    // insert data into both tables in a single transaction
+    char *sql = sqlite3_mprintf("INSERT INTO \"%w\" (first_name, \"" CUSTOMERS_TABLE_COLUMN_LASTNAME "\", age, note, stamp) VALUES ('john', 'doe', 30, 'test note', 'stamp1');", CUSTOMERS_TABLE);
+    rc = sqlite3_exec(db[0], sql, NULL, NULL, NULL);
+    sqlite3_free(sql);
+    if (rc != SQLITE_OK) goto finalize;
+    
+    sql = sqlite3_mprintf("INSERT INTO \"%w\" (first_name, \"" CUSTOMERS_TABLE_COLUMN_LASTNAME "\") VALUES ('jane', 'smith');", CUSTOMERS_NOCOLS_TABLE);
+    rc = sqlite3_exec(db[0], sql, NULL, NULL, NULL);
+    sqlite3_free(sql);
+    if (rc != SQLITE_OK) goto finalize;
+    
+    rc = sqlite3_exec(db[0], "COMMIT;", NULL, NULL, NULL);
+    if (rc != SQLITE_OK) goto finalize;
+    
+    // perform different transactions on both tables in client 1
+    rc = sqlite3_exec(db[1], "BEGIN TRANSACTION;", NULL, NULL, NULL);
+    if (rc != SQLITE_OK) goto finalize;
+    
+    sql = sqlite3_mprintf("INSERT INTO \"%w\" (first_name, \"" CUSTOMERS_TABLE_COLUMN_LASTNAME "\", age, note, stamp) VALUES ('alice', 'jones', 25, 'another note', 'stamp2');", CUSTOMERS_TABLE);
+    rc = sqlite3_exec(db[1], sql, NULL, NULL, NULL);
+    sqlite3_free(sql);
+    if (rc != SQLITE_OK) goto finalize;
+    
+    sql = sqlite3_mprintf("INSERT INTO \"%w\" (first_name, \"" CUSTOMERS_TABLE_COLUMN_LASTNAME "\") VALUES ('bob', 'wilson');", CUSTOMERS_NOCOLS_TABLE);
+    rc = sqlite3_exec(db[1], sql, NULL, NULL, NULL);
+    sqlite3_free(sql);
+    if (rc != SQLITE_OK) goto finalize;
+    
+    rc = sqlite3_exec(db[1], "COMMIT;", NULL, NULL, NULL);
+    if (rc != SQLITE_OK) goto finalize;
+    
+    // merge changes between the two clients
+    if (do_merge(db, nclients, false) == false) {
+        goto finalize;
+    }
+    
+    // verify that both databases have the same content for both tables
+    for (int i=1; i<nclients; ++i) {
+        // compare customers table
+        sql = sqlite3_mprintf("SELECT * FROM \"%w\" ORDER BY first_name, \"" CUSTOMERS_TABLE_COLUMN_LASTNAME "\";", CUSTOMERS_TABLE);
+        bool comparison_result = do_compare_queries(db[0], sql, db[i], sql, -1, -1, print_result);
+        sqlite3_free(sql);
+        if (comparison_result == false) goto finalize;
+        
+        // compare customers_nocols table
+        const char *nocols_sql = "SELECT * FROM \"" CUSTOMERS_NOCOLS_TABLE "\" ORDER BY first_name, \"" CUSTOMERS_TABLE_COLUMN_LASTNAME "\";";
+        if (do_compare_queries(db[0], nocols_sql, db[i], nocols_sql, -1, -1, print_result) == false) goto finalize;
+    }
+    
+    if (print_result) {
+        printf("\n-> " CUSTOMERS_TABLE "\n");
+        sql = sqlite3_mprintf("SELECT * FROM \"%w\" ORDER BY first_name, \"" CUSTOMERS_TABLE_COLUMN_LASTNAME "\";", CUSTOMERS_TABLE);
+        do_query(db[0], sql, query_table);
+        sqlite3_free(sql);
+        
+        printf("\n-> \"" CUSTOMERS_NOCOLS_TABLE "\"\n");
+        do_query(db[0], "SELECT * FROM \"" CUSTOMERS_NOCOLS_TABLE "\" ORDER BY first_name, \"" CUSTOMERS_TABLE_COLUMN_LASTNAME "\";", query_table);
+    }
+    
+    result = true;
+    rc = SQLITE_OK;
+    
+finalize:
+    for (int i=0; i<nclients; ++i) {
+        if (rc != SQLITE_OK && db[i] && (sqlite3_errcode(db[i]) != SQLITE_OK)) printf("do_test_merge_two_tables error: %s\n", sqlite3_errmsg(db[i]));
+        if (db[i]) {
+            if (sqlite3_get_autocommit(db[i]) == 0) {
+                result = false;
+                printf("do_test_merge_two_tables error: db %d is in transaction\n", i);
+            }
+            
+            int counter = close_db_v2(db[i]);
+            if (counter > 0) {
+                result = false;
+                printf("do_test_merge_two_tables error: db %d has %d unterminated statements\n", i, counter);
+            }
+        }
+        if (cleanup_databases) {
+            char buf[256];
+            do_build_database_path(buf, i, timestamp, saved_counter++);
+            file_delete(buf);
+        }
+    }
+    return result;
+}
+
 bool do_test_prikey (int nclients, bool print_result, bool cleanup_databases) {
     sqlite3 *db[MAX_SIMULATED_CLIENTS] = {NULL};
     bool result = false;
@@ -3455,7 +3604,8 @@ int main(int argc, const char * argv[]) {
     result += test_report("Functions Test:", do_test_functions(db, print_result));
     result += test_report("Functions Test (Int):", do_test_internal_functions());
     result += test_report("String Func Test:", do_test_string_replace_prefix());
-    
+    result += test_report("Test Many Columns:", do_test_many_columns(600, db));
+
     // close local database
     db = close_db(db);
     
@@ -3467,6 +3617,7 @@ int main(int argc, const char * argv[]) {
     result += test_report("Merge Test 5:", do_test_merge_5(2, print_result, cleanup_databases, false));
     result += test_report("Merge Alter Schema 1:", do_test_merge_alter_schema_1(2, print_result, cleanup_databases, false));
     result += test_report("Merge Alter Schema 2:", do_test_merge_alter_schema_2(2, print_result, cleanup_databases, false));
+    result += test_report("Merge Two Tables Test:", do_test_merge_two_tables(2, print_result, cleanup_databases));
     result += test_report("PriKey NULL Test:", do_test_prikey(2, print_result, cleanup_databases));
     result += test_report("Test Double Init:", do_test_double_init(2, cleanup_databases));
     

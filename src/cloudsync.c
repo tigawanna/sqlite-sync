@@ -226,6 +226,14 @@ typedef struct PACKED {
     uint8_t     unused[6];        // padding to ensure the struct is exactly 32 bytes
 } cloudsync_network_header;
 
+typedef struct {
+    sqlite3_value   *table_name;
+    sqlite3_value   **new_values;
+    sqlite3_value   **old_values;
+    int             count;
+    int             capacity;
+} cloudsync_update_payload;
+
 #ifdef _MSC_VER
     #pragma pack(pop)
 #endif
@@ -2545,105 +2553,6 @@ cleanup:
     if (pk != buffer) cloudsync_memory_free(pk);
 }
 
-void cloudsync_update (sqlite3_context *context, int argc, sqlite3_value **argv) {
-    DEBUG_FUNCTION("cloudsync_update %s", sqlite3_value_text(argv[0]));
-    // debug_values(argc-1, &argv[1]);
-    
-    // arguments are:
-    // [0]                  table name
-    // [1..table->npks]     NEW.prikeys
-    // [1+table->npks ..]   OLD.prikeys
-    // then                 NEW.value,OLD.value
-    
-    // retrieve context
-    sqlite3 *db = sqlite3_context_db_handle(context);
-    cloudsync_context *data = (cloudsync_context *)sqlite3_user_data(context);
-    
-    // lookup table
-    const char *table_name = (const char *)sqlite3_value_text(argv[0]);
-    cloudsync_table_context *table = table_lookup(data, table_name);
-    if (!table) {
-        dbutils_context_result_error(context, "Unable to retrieve table name %s in cloudsync_update.", table_name);
-        return;
-    }
-    
-    // compute the next database version for tracking changes
-    sqlite3_int64 db_version = db_version_next(db, data, CLOUDSYNC_VALUE_NOTSET);
-    int rc = SQLITE_OK;
-    
-    // check if the primary key(s) have changed by comparing the NEW and OLD primary key values
-    bool prikey_changed = false;
-    for (int i=1; i<=table->npks; ++i) {
-        if (dbutils_value_compare(argv[i], argv[i+table->npks]) != 0) {
-            prikey_changed = true;
-            break;
-        }
-    }
-    
-    // encode the NEW primary key values into a buffer (used later for indexing)
-    char buffer[1024];
-    char buffer2[1024];
-    size_t pklen = sizeof(buffer);
-    size_t oldpklen = sizeof(buffer2);
-    char *oldpk = NULL;
-    
-    char *pk = pk_encode_prikey(&argv[1], table->npks, buffer, &pklen);
-    if (!pk) {
-        sqlite3_result_error(context, "Not enough memory to encode the primary key(s).", -1);
-        return;
-    }
-    
-    if (prikey_changed) {
-        // if the primary key has changed, we need to handle the row differently:
-        // 1. mark the old row (OLD primary key) as deleted
-        // 2. create a new row (NEW primary key)
-        
-        // encode the OLD primary key into a buffer
-        oldpk = pk_encode_prikey(&argv[1+table->npks], table->npks, buffer2, &oldpklen);
-        if (!oldpk) {
-            if (pk != buffer) cloudsync_memory_free(pk);
-            sqlite3_result_error(context, "Not enough memory to encode the primary key(s).", -1);
-            return;
-        }
-        
-        // mark the rows with the old primary key as deleted in the metadata (old row handling)
-        rc = local_mark_delete_meta(db, table, oldpk, oldpklen, db_version, BUMP_SEQ(data));
-        if (rc != SQLITE_OK) goto cleanup;
-        
-        // move non-sentinel metadata entries from OLD primary key to NEW primary key
-        // handles the case where some metadata is retained across primary key change
-        // see https://github.com/sqliteai/sqlite-sync/blob/main/docs/PriKey.md for more details
-        rc = local_update_move_meta(db, table, pk, pklen, oldpk, oldpklen, db_version);
-        if (rc != SQLITE_OK) goto cleanup;
-        
-        // mark a new sentinel row with the new primary key in the metadata
-        rc = local_mark_insert_sentinel_meta(db, table, pk, pklen, db_version, BUMP_SEQ(data));
-        if (rc != SQLITE_OK) goto cleanup;
-        
-        // free memory if the OLD primary key was dynamically allocated
-        if (oldpk != buffer2) cloudsync_memory_free(oldpk);
-        oldpk = NULL;
-    }
-    
-    // compare NEW and OLD values (excluding primary keys) to handle column updates
-    // starting index for column values
-    int index = 1 + (table->npks * 2);
-    for (int i=0; i<table->ncols; i++) {
-        if (dbutils_value_compare(argv[i+index], argv[i+index+1]) != 0) {
-            // if a column value has changed, mark it as updated in the metadata
-            // columns are in cid order
-            rc = local_mark_insert_or_update_meta(db, table, pk, pklen, table->col_name[i], db_version, BUMP_SEQ(data));
-            if (rc != SQLITE_OK) goto cleanup;
-        }
-        ++index;
-    }
-    
-cleanup:
-    if (rc != SQLITE_OK) sqlite3_result_error(context, sqlite3_errmsg(db), -1);
-    if (pk != buffer) cloudsync_memory_free(pk);
-    if (oldpk && (oldpk != buffer2)) cloudsync_memory_free(oldpk);
-}
-
 void cloudsync_delete (sqlite3_context *context, int argc, sqlite3_value **argv) {
     DEBUG_FUNCTION("cloudsync_delete %s", sqlite3_value_text(argv[0]));
     // debug_values(argc-1, &argv[1]);
@@ -2685,6 +2594,165 @@ cleanup:
     if (rc != SQLITE_OK) sqlite3_result_error(context, sqlite3_errmsg(db), -1);
     // free memory if the primary key was dynamically allocated
     if (pk != buffer) cloudsync_memory_free(pk);
+}
+
+// MARK: -
+
+void cloudsync_update_payload_free (cloudsync_update_payload *payload) {
+    for (int i=0; i<payload->count; i++) {
+        sqlite3_value_free(payload->new_values[i]);
+        sqlite3_value_free(payload->old_values[i]);
+    }
+    cloudsync_memory_free(payload->new_values);
+    cloudsync_memory_free(payload->old_values);
+    sqlite3_value_free(payload->table_name);
+    payload->new_values = NULL;
+    payload->old_values = NULL;
+    payload->table_name = NULL;
+    payload->count = 0;
+    payload->capacity = 0;
+}
+
+int cloudsync_update_payload_append (cloudsync_update_payload *payload, sqlite3_value *v1, sqlite3_value *v2, sqlite3_value *v3) {
+    if (payload->count >= payload->capacity) {
+        int newcap = payload->capacity ? payload->capacity * 2 : 128;
+        
+        sqlite3_value **new_values_2 = (sqlite3_value **)cloudsync_memory_realloc(payload->new_values, newcap * sizeof(*new_values_2));
+        if (!new_values_2) return SQLITE_NOMEM;
+        payload->new_values = new_values_2;
+        
+        sqlite3_value **old_values_2 = (sqlite3_value **)cloudsync_memory_realloc(payload->old_values, newcap * sizeof(*old_values_2));
+        if (!old_values_2) return SQLITE_NOMEM;
+        payload->old_values = old_values_2;
+        
+        payload->capacity = newcap;
+    }
+    
+    int index = payload->count;
+    if (payload->table_name == NULL) payload->table_name = sqlite3_value_dup(v1);
+    else if (dbutils_value_compare(payload->table_name, v1) != 0) return SQLITE_NOMEM;
+    payload->new_values[index] = sqlite3_value_dup(v2);
+    payload->old_values[index] = sqlite3_value_dup(v3);
+    payload->count++;
+    
+    // sanity check memory allocations
+    bool v1_can_be_null = (sqlite3_value_type(v1) == SQLITE_NULL);
+    bool v2_can_be_null = (sqlite3_value_type(v2) == SQLITE_NULL);
+    bool v3_can_be_null = (sqlite3_value_type(v3) == SQLITE_NULL);
+    
+    if ((payload->table_name == NULL) && (!v1_can_be_null)) return SQLITE_NOMEM;
+    if ((payload->old_values[index] == NULL) && (!v2_can_be_null)) return SQLITE_NOMEM;
+    if ((payload->new_values[index] == NULL) && (!v3_can_be_null)) return SQLITE_NOMEM;
+    
+    return SQLITE_OK;
+}
+
+void cloudsync_update_step (sqlite3_context *context, int argc, sqlite3_value **argv) {
+    // argv[0] => table_name
+    // argv[1] => new_column_value
+    // argv[2] => old_column_value
+    
+    // allocate/get the update payload
+    cloudsync_update_payload *payload = (cloudsync_update_payload *)sqlite3_aggregate_context(context, sizeof(cloudsync_update_payload));
+    if (!payload) {sqlite3_result_error_nomem(context); return;}
+    
+    if (cloudsync_update_payload_append(payload, argv[0], argv[1], argv[2]) != SQLITE_OK) {
+        sqlite3_result_error_nomem(context);
+    }
+}
+
+void cloudsync_update_final (sqlite3_context *context) {
+    cloudsync_update_payload *payload = (cloudsync_update_payload *)sqlite3_aggregate_context(context, sizeof(cloudsync_update_payload));
+    if (!payload || payload->count == 0) return;
+    
+    // retrieve context
+    sqlite3 *db = sqlite3_context_db_handle(context);
+    cloudsync_context *data = (cloudsync_context *)sqlite3_user_data(context);
+    
+    // lookup table
+    const char *table_name = (const char *)sqlite3_value_text(payload->table_name);
+    cloudsync_table_context *table = table_lookup(data, table_name);
+    if (!table) {
+        dbutils_context_result_error(context, "Unable to retrieve table name %s in cloudsync_update.", table_name);
+        return;
+    }
+
+    // compute the next database version for tracking changes
+    sqlite3_int64 db_version = db_version_next(db, data, CLOUDSYNC_VALUE_NOTSET);
+    int rc = SQLITE_OK;
+    
+    // Check if the primary key(s) have changed
+    bool prikey_changed = false;
+    for (int i=0; i<table->npks; ++i) {
+        if (dbutils_value_compare(payload->old_values[i], payload->new_values[i]) != 0) {
+            prikey_changed = true;
+            break;
+        }
+    }
+
+    // encode the NEW primary key values into a buffer (used later for indexing)
+    char buffer[1024];
+    char buffer2[1024];
+    size_t pklen = sizeof(buffer);
+    size_t oldpklen = sizeof(buffer2);
+    char *oldpk = NULL;
+    
+    char *pk = pk_encode_prikey(payload->new_values, table->npks, buffer, &pklen);
+    if (!pk) {
+        sqlite3_result_error(context, "Not enough memory to encode the primary key(s).", -1);
+        return;
+    }
+    
+    if (prikey_changed) {
+        // if the primary key has changed, we need to handle the row differently:
+        // 1. mark the old row (OLD primary key) as deleted
+        // 2. create a new row (NEW primary key)
+        
+        // encode the OLD primary key into a buffer
+        oldpk = pk_encode_prikey(payload->old_values, table->npks, buffer2, &oldpklen);
+        if (!oldpk) {
+            if (pk != buffer) cloudsync_memory_free(pk);
+            sqlite3_result_error(context, "Not enough memory to encode the primary key(s).", -1);
+            return;
+        }
+        
+        // mark the rows with the old primary key as deleted in the metadata (old row handling)
+        rc = local_mark_delete_meta(db, table, oldpk, oldpklen, db_version, BUMP_SEQ(data));
+        if (rc != SQLITE_OK) goto cleanup;
+        
+        // move non-sentinel metadata entries from OLD primary key to NEW primary key
+        // handles the case where some metadata is retained across primary key change
+        // see https://github.com/sqliteai/sqlite-sync/blob/main/docs/PriKey.md for more details
+        rc = local_update_move_meta(db, table, pk, pklen, oldpk, oldpklen, db_version);
+        if (rc != SQLITE_OK) goto cleanup;
+        
+        // mark a new sentinel row with the new primary key in the metadata
+        rc = local_mark_insert_sentinel_meta(db, table, pk, pklen, db_version, BUMP_SEQ(data));
+        if (rc != SQLITE_OK) goto cleanup;
+        
+        // free memory if the OLD primary key was dynamically allocated
+        if (oldpk != buffer2) cloudsync_memory_free(oldpk);
+        oldpk = NULL;
+    }
+    
+    // compare NEW and OLD values (excluding primary keys) to handle column updates
+    for (int i=0; i<table->ncols; i++) {
+        int col_index = table->npks + i;  // Regular columns start after primary keys
+
+        if (dbutils_value_compare(payload->old_values[col_index], payload->new_values[col_index]) != 0) {
+            // if a column value has changed, mark it as updated in the metadata
+            // columns are in cid order
+            rc = local_mark_insert_or_update_meta(db, table, pk, pklen, table->col_name[i], db_version, BUMP_SEQ(data));
+            if (rc != SQLITE_OK) goto cleanup;
+        }
+    }
+    
+cleanup:
+    if (rc != SQLITE_OK) sqlite3_result_error(context, sqlite3_errmsg(db), -1);
+    if (pk != buffer) cloudsync_memory_free(pk);
+    if (oldpk && (oldpk != buffer2)) cloudsync_memory_free(oldpk);
+    
+    cloudsync_update_payload_free(payload);
 }
 
 // MARK: -
@@ -3274,7 +3342,7 @@ int cloudsync_register (sqlite3 *db, char **pzErrMsg) {
     rc = dbutils_register_function(db, "cloudsync_insert", cloudsync_insert, -1, pzErrMsg, ctx, NULL);
     if (rc != SQLITE_OK) return rc;
     
-    rc = dbutils_register_function(db, "cloudsync_update", cloudsync_update, -1, pzErrMsg, ctx, NULL);
+    rc = dbutils_register_aggregate(db, "cloudsync_update", cloudsync_update_step, cloudsync_update_final, 3, pzErrMsg, ctx, NULL);
     if (rc != SQLITE_OK) return rc;
     
     rc = dbutils_register_function(db, "cloudsync_delete", cloudsync_delete, -1, pzErrMsg, ctx, NULL);
