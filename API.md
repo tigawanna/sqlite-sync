@@ -44,6 +44,18 @@ Before initialization, `cloudsync_init` performs schema sanity checks to ensure 
 - All primary key columns must be `NOT NULL`.
 - All non-primary key `NOT NULL` columns must have a `DEFAULT` value.
 
+**Schema Design Considerations:**
+
+When designing your database schema for SQLite Sync, follow these essential requirements:
+
+- **Primary Keys**: Use TEXT primary keys with `cloudsync_uuid()` for globally unique identifiers. Avoid auto-incrementing integers.
+- **Column Constraints**: All NOT NULL columns (except primary keys) must have DEFAULT values to prevent synchronization errors.
+- **UNIQUE Constraints**: In multi-tenant scenarios, use composite UNIQUE constraints (e.g., `UNIQUE(tenant_id, email)`) instead of global uniqueness.
+- **Foreign Key Compatibility**: Be aware of potential conflicts during CRDT merge operations and RLS policy interactions.
+- **Trigger Compatibility**: Triggers may cause duplicate operations or be called multiple times due to column-by-column processing.
+
+For comprehensive guidelines, see the [Database Schema Recommendations](../README.md#database-schema-recommendations) section in the README.
+
 The function supports three overloads:
 - `cloudsync_init(table_name)`: Uses the default 'cls' CRDT algorithm.
 - `cloudsync_init(table_name, crdt_algo)`: Specifies a CRDT algorithm ('cls', 'dws', 'aws', 'gos').
@@ -373,6 +385,8 @@ SELECT cloudsync_network_has_unsent_changes();
 
 **Returns:** None.
 
+**Errors:** See [Network Errors](#network-errors) for common error conditions.
+
 **Example:**
 
 ```sql
@@ -397,6 +411,8 @@ On success, it returns `SQLITE_OK`, and the return value indicates how many chan
 
 **Returns:** The number of changes downloaded. Errors are reported via the SQLite return code.
 
+**Errors:** See [Network Errors](#network-errors) for common error conditions.
+
 **Example:**
 
 ```sql
@@ -418,6 +434,8 @@ SELECT cloudsync_network_check_changes();
 - `max_retries` (INTEGER, optional): The maximum number of times to retry the synchronization. Defaults to 1.
 
 **Returns:** The number of changes downloaded. Errors are reported via the SQLite return code.
+
+**Errors:** See [Network Errors](#network-errors) for common error conditions.
 
 **Example:**
 
@@ -460,3 +478,21 @@ SELECT cloudsync_network_reset_sync_version();
 ```sql
 SELECT cloudsync_network_logout();
 ```
+
+---
+
+### Network Errors
+
+Network functions may encounter specific errors during synchronization:
+
+#### Device Limit Exceeded
+
+If the device limit for your current plan on the cloud node is exceeded, network functions return error code `SQLITE_ERROR` (1) with the error message:
+
+```
+403 Device limit reached: You've already registered the maximum number of <n> devices allowed by your current plan.
+```
+
+**Resolution:** To resolve this error, you can:
+- [Upgrade to a higher plan](https://www.sqlite.ai/pricing) to increase your device limit
+- Remove unused devices from the OffSync section of your database in the [SQLite Cloud dashboard](https://dashboard.sqlitecloud.io/)
