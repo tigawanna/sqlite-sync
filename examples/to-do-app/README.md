@@ -10,7 +10,6 @@ Create a new project using this template:
 ```bash
 npx create-expo-app MyApp --template @sqliteai/todoapp
 cd MyApp
-npm install
 ```
 
 ### 2. Database Setup
