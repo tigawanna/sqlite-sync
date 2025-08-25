@@ -15,11 +15,13 @@ A simple Swift App QuickStart with the SQLite CloudSync extension loading. Now y
 
 5. You should now be in the **General** tab. Scroll down to **"Frameworks, Libraries, and Embedded Content"**
 
-6. Click the **+** button → **Add Other...** → **Add Files...**
+6. Click the old `CloudSync.xcframework` framework and press the **-** button
 
-7. Select the downloaded `CloudSync.xcframework` folder
+7. Click the **+** button → **Add Other...** → **Add Files...**
 
-8. Switch to the **Build Phases** tab and verify that `CloudSync.xcframework` appears under **Embedded Frameworks**
+8. Select the downloaded `CloudSync.xcframework` folder
+
+9. Switch to the **Build Phases** tab and verify that `CloudSync.xcframework` appears under **Embedded Frameworks**
 
 ## Handle Security Permissions (macOS)
 
