@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "todoapp",
+    "slug": "todoapp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "description": "A todo app demonstrating SQLite CloudSync extension functionalities",
+    "keywords": ["sqlite", "cloudsync", "todo", "sync"],
+    "privacy": "public",
+    "platforms": ["ios", "android"],
+    "plugins": [
+      "./plugins/CloudSyncSetup.js"
+    ],
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "ai.sqlite.todoapp"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "ai.sqlite.todoapp"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "faffd54b-fc15-4368-987a-a73b08640cfd"
+      }
+    },
+    "owner": "sqliteai"
+  }
+}
