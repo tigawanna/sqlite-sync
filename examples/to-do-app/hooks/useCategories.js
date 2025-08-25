@@ -59,10 +59,9 @@ const useCategories = () => {
       await db.execute('INSERT OR IGNORE INTO tags (uuid, name) VALUES (?, ?)', [randomUUID(), 'Work'])
       await db.execute('INSERT OR IGNORE INTO tags (uuid, name) VALUES (?, ?)', [randomUUID(), 'Personal'])
 
-      if (CONNECTION_STRING.startsWith('sqlitecloud://')) {
+      if (CONNECTION_STRING && CONNECTION_STRING.startsWith('sqlitecloud://')) {
         await db.execute(`SELECT cloudsync_network_init('${CONNECTION_STRING}');`);
       } else {
-        console.warn(CONNECTION_STRING)
         throw new Error('No valid CONNECTION_STRING provided, cloudsync_network_init will not be called');
       }
 
