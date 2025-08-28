@@ -2,8 +2,7 @@
 
 A simple Expo example demonstrating SQLite synchronization with CloudSync. Build cross-platform apps that sync data seamlessly across devices.
 
-<img src="https://github.com/user-attachments/assets/45302aa5-d1d2-444a-a3c4-119a26b264e4" width="40%" height="40%">
-
+<img src="https://github.com/user-attachments/assets/86db5c25-d8ff-4c31-b157-8dff178e1720" width="40%" height="40%">
 
 ## 🚀 Quick Start
 
