@@ -254,8 +254,10 @@ jobs:
             if [ -d "$folder" ]; then
               name=$(basename "$folder")
               if [[ "$name" != "github-pages" && "$name" != "cloudsync-wasm" ]]; then
+                if [[ "$name" != "cloudsync-apple-xcframework" ]]; then
+                  tar -czf "${name}-${{ steps.tag.outputs.version }}.tar.gz" -C "$folder" .
+                fi
                 (cd "$folder" && zip -rq "../../${name}-${{ steps.tag.outputs.version }}.zip" .)
-                tar -czf "${name}-${{ steps.tag.outputs.version }}.tar.gz" -C "$folder" .
               fi
             fi
           done
