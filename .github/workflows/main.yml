@@ -236,12 +236,29 @@ jobs:
           echo "❌ CLOUDSYNC_VERSION not found in cloudsync.h"
           exit 1
 
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v4.2.2
+        if: steps.tag.outputs.version != ''
         with:
-          node-version: '20.x'
-          registry-url: 'https://registry.npmjs.org'
+          repository: sqliteai/sqlite-wasm
+          path: sqlite-wasm
+          submodules: recursive
+          token: ${{ secrets.PAT }}
+
+      - name: release sqlite-wasm
+        if: steps.tag.outputs.version != ''
+        run: |
+          cd sqlite-wasm
+          git config --global user.email "$GITHUB_ACTOR@users.noreply.github.com"
+          git config --global user.name "$GITHUB_ACTOR"
+          cd modules/sqlite-sync
+          git checkout ${{ github.sha }}
+          cd ../..
+          git add modules/sqlite-sync
+          git commit -m "Bump sqlite-sync version to ${{ steps.tag.outputs.version }}"
+          git push origin main
           
       - name: zip artifacts
+        if: steps.tag.outputs.version != ''
         run: |
           for folder in "artifacts"/*; do
             if [ -d "$folder" ]; then
