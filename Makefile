@@ -56,6 +56,18 @@ COV_FILES = $(filter-out $(SRC_DIR)/lz4.c $(SRC_DIR)/network.c, $(SRC_FILES))
 CURL_LIB = $(CURL_DIR)/$(PLATFORM)/libcurl.a
 TEST_TARGET = $(patsubst %.c,$(DIST_DIR)/%$(EXE), $(notdir $(TEST_SRC)))
 
+# Native network support only for Apple platforms
+ifdef NATIVE_NETWORK
+	RELEASE_OBJ += $(patsubst %.m, $(BUILD_RELEASE)/%_m.o, $(notdir $(wildcard $(SRC_DIR)/*.m)))
+	LDFLAGS = -framework Foundation
+	CFLAGS += -DCLOUDSYNC_OMIT_CURL
+
+$(BUILD_RELEASE)/%_m.o: %.m
+	$(CC) $(CFLAGS) -fobjc-arc -O3 -fPIC -c $< -o $@
+else
+	LDFLAGS = -L./$(CURL_DIR)/$(PLATFORM) -lcurl
+endif
+
 # Platform-specific settings
 ifeq ($(PLATFORM),windows)
 	TARGET := $(DIST_DIR)/cloudsync.dll
@@ -125,18 +137,6 @@ ifneq (,$(filter $(platform),linux windows))
 endif
 	T_CFLAGS += -fprofile-arcs -ftest-coverage
 	T_LDFLAGS += -fprofile-arcs -ftest-coverage
-endif
-
-# Native network support only for Apple platforms
-ifdef NATIVE_NETWORK
-	RELEASE_OBJ += $(patsubst %.m, $(BUILD_RELEASE)/%_m.o, $(notdir $(wildcard $(SRC_DIR)/*.m)))
-	LDFLAGS += -framework Foundation
-	CFLAGS += -DCLOUDSYNC_OMIT_CURL
-
-$(BUILD_RELEASE)/%_m.o: %.m
-	$(CC) $(CFLAGS) -fobjc-arc -O3 -fPIC -c $< -o $@
-else
-	LDFLAGS += -L./$(CURL_DIR)/$(PLATFORM) -lcurl
 endif
 
 # Windows .def file generation
