@@ -206,7 +206,7 @@ typedef struct {
     size_t      bused;
     uint64_t    nrows;
     uint16_t    ncols;
-} cloudsync_network_payload;
+} cloudsync_data_payload;
 
 #ifdef _MSC_VER
     #pragma pack(push, 1) // For MSVC: pack struct with 1-byte alignment
@@ -224,7 +224,7 @@ typedef struct PACKED {
     uint32_t    nrows;
     uint64_t    schema_hash;
     uint8_t     unused[6];        // padding to ensure the struct is exactly 32 bytes
-} cloudsync_network_header;
+} cloudsync_payload_header;
 
 typedef struct {
     sqlite3_value   *table_name;
@@ -1920,16 +1920,16 @@ cleanup:
 
 // MARK: - Payload Encode / Decode -
 
-bool cloudsync_buffer_free (cloudsync_network_payload *payload) {
+bool cloudsync_buffer_free (cloudsync_data_payload *payload) {
     if (payload) {
         if (payload->buffer) cloudsync_memory_free(payload->buffer);
-        memset(payload, 0, sizeof(cloudsync_network_payload));
+        memset(payload, 0, sizeof(cloudsync_data_payload));
     }
         
     return false;
 }
 
-bool cloudsync_buffer_check (cloudsync_network_payload *payload, size_t needed) {
+bool cloudsync_buffer_check (cloudsync_data_payload *payload, size_t needed) {
     // alloc/resize buffer
     if (payload->bused + needed > payload->balloc) {
         if (needed < CLOUDSYNC_PAYLOAD_MINBUF_SIZE) needed = CLOUDSYNC_PAYLOAD_MINBUF_SIZE;
@@ -1940,15 +1940,15 @@ bool cloudsync_buffer_check (cloudsync_network_payload *payload, size_t needed) 
         
         payload->buffer = buffer;
         payload->balloc = balloc;
-        if (payload->nrows == 0) payload->bused = sizeof(cloudsync_network_header);
+        if (payload->nrows == 0) payload->bused = sizeof(cloudsync_payload_header);
     }
     
     return true;
 }
 
-void cloudsync_network_header_init (cloudsync_network_header *header, uint32_t expanded_size, uint16_t ncols, uint32_t nrows, uint64_t hash) {
-    memset(header, 0, sizeof(cloudsync_network_header));
-    assert(sizeof(cloudsync_network_header)==32);
+void cloudsync_payload_header_init (cloudsync_payload_header *header, uint32_t expanded_size, uint16_t ncols, uint32_t nrows, uint64_t hash) {
+    memset(header, 0, sizeof(cloudsync_payload_header));
+    assert(sizeof(cloudsync_payload_header)==32);
     
     int major, minor, patch;
     sscanf(CLOUDSYNC_VERSION, "%d.%d.%d", &major, &minor, &patch);
@@ -1969,7 +1969,7 @@ void cloudsync_payload_encode_step (sqlite3_context *context, int argc, sqlite3_
     // debug_values(argc, argv);
     
     // allocate/get the session context
-    cloudsync_network_payload *payload = (cloudsync_network_payload *)sqlite3_aggregate_context(context, sizeof(cloudsync_network_payload));
+    cloudsync_data_payload *payload = (cloudsync_data_payload *)sqlite3_aggregate_context(context, sizeof(cloudsync_data_payload));
     if (!payload) return;
     
     // check if the step function is called for the first time
@@ -1993,7 +1993,7 @@ void cloudsync_payload_encode_final (sqlite3_context *context) {
     DEBUG_FUNCTION("cloudsync_payload_encode_final");
 
     // get the session context
-    cloudsync_network_payload *payload = (cloudsync_network_payload *)sqlite3_aggregate_context(context, sizeof(cloudsync_network_payload));
+    cloudsync_data_payload *payload = (cloudsync_data_payload *)sqlite3_aggregate_context(context, sizeof(cloudsync_data_payload));
     if (!payload) return;
     
     if (payload->nrows == 0) {
@@ -2002,7 +2002,7 @@ void cloudsync_payload_encode_final (sqlite3_context *context) {
     }
     
     // encode payload
-    int header_size = (int)sizeof(cloudsync_network_header);
+    int header_size = (int)sizeof(cloudsync_payload_header);
     int real_buffer_size = (int)(payload->bused - header_size);
     int zbound = LZ4_compressBound(real_buffer_size);
     char *buffer = cloudsync_memory_alloc(zbound + header_size);
@@ -2013,15 +2013,15 @@ void cloudsync_payload_encode_final (sqlite3_context *context) {
     }
     
     // adjust buffer to compress to skip the reserved header
-    char *src_buffer = payload->buffer + sizeof(cloudsync_network_header);
+    char *src_buffer = payload->buffer + sizeof(cloudsync_payload_header);
     int zused = LZ4_compress_default(src_buffer, buffer+header_size, real_buffer_size, zbound);
     bool use_uncompressed_buffer = (!zused || zused > real_buffer_size);
     CHECK_FORCE_UNCOMPRESSED_BUFFER();
     
-    // setup payload network header
+    // setup payload header
     cloudsync_context *data = (cloudsync_context *)sqlite3_user_data(context);
-    cloudsync_network_header header;
-    cloudsync_network_header_init(&header, (use_uncompressed_buffer) ? 0 : real_buffer_size, payload->ncols, (uint32_t)payload->nrows, data->schema_hash);
+    cloudsync_payload_header header;
+    cloudsync_payload_header_init(&header, (use_uncompressed_buffer) ? 0 : real_buffer_size, payload->ncols, (uint32_t)payload->nrows, data->schema_hash);
     
     // if compression fails or if compressed size is bigger than original buffer, then use the uncompressed buffer
     if (use_uncompressed_buffer) {
@@ -2031,8 +2031,8 @@ void cloudsync_payload_encode_final (sqlite3_context *context) {
     }
     
     // copy header and data to SQLite BLOB
-    memcpy(buffer, &header, sizeof(cloudsync_network_header));
-    int blob_size = zused+sizeof(cloudsync_network_header);
+    memcpy(buffer, &header, sizeof(cloudsync_payload_header));
+    int blob_size = zused+sizeof(cloudsync_payload_header);
     sqlite3_result_blob(context, buffer, blob_size, SQLITE_TRANSIENT);
     
     // cleanup memory
@@ -2105,8 +2105,8 @@ int cloudsync_pk_decode_bind_callback (void *xdata, int index, int type, int64_t
 
 int cloudsync_payload_apply (sqlite3_context *context, const char *payload, int blen) {
     // decode header
-    cloudsync_network_header header;
-    memcpy(&header, payload, sizeof(cloudsync_network_header));
+    cloudsync_payload_header header;
+    memcpy(&header, payload, sizeof(cloudsync_payload_header));
 
     header.signature = ntohl(header.signature);
     header.expanded_size = ntohl(header.expanded_size);
@@ -2131,8 +2131,8 @@ int cloudsync_payload_apply (sqlite3_context *context, const char *payload, int 
         return -1;
     }
     
-    const char *buffer = payload + sizeof(cloudsync_network_header);
-    blen -= sizeof(cloudsync_network_header);
+    const char *buffer = payload + sizeof(cloudsync_payload_header);
+    blen -= sizeof(cloudsync_payload_header);
     
     // check if payload is compressed
     char *clone = NULL;
@@ -2245,7 +2245,7 @@ void cloudsync_payload_decode (sqlite3_context *context, int argc, sqlite3_value
     
     // sanity check payload size
     int blen = sqlite3_value_bytes(argv[0]);
-    if (blen < (int)sizeof(cloudsync_network_header)) {
+    if (blen < (int)sizeof(cloudsync_payload_header)) {
         dbutils_context_result_error(context, "Error on cloudsync_payload_decode: invalid input size.");
         sqlite3_result_error_code(context, SQLITE_MISUSE);
         return;

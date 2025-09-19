@@ -716,11 +716,12 @@ int cloudsync_network_send_changes_internal (sqlite3_context *context, int argc,
         return rc;
     }
     
-    // exit if there are no data to send
+    // exit if there is no data to send
     if (blob == NULL || blob_size == 0) return SQLITE_OK;
     
     NETWORK_RESULT res = network_receive_buffer(data, data->upload_endpoint, data->authentication, true, false, NULL, CLOUDSYNC_HEADER_SQLITECLOUD);
     if (res.code != CLOUDSYNC_NETWORK_BUFFER) {
+        cloudsync_memory_free(blob);
         network_result_to_sqlite_error(context, res, "cloudsync_network_send_changes unable to receive upload URL");
         return SQLITE_ERROR;
     }
@@ -730,6 +731,7 @@ int cloudsync_network_send_changes_internal (sqlite3_context *context, int argc,
     cloudsync_memory_free(blob);
     if (sent == false) {
         network_result_to_sqlite_error(context, res, "cloudsync_network_send_changes unable to upload BLOB changes to remote host.");
+        network_result_cleanup(&res);
         return SQLITE_ERROR;
     }
     
@@ -743,6 +745,7 @@ int cloudsync_network_send_changes_internal (sqlite3_context *context, int argc,
     res = network_receive_buffer(data, data->upload_endpoint, data->authentication, true, true, json_payload, CLOUDSYNC_HEADER_SQLITECLOUD);
     if (res.code != CLOUDSYNC_NETWORK_OK) {
         network_result_to_sqlite_error(context, res, "cloudsync_network_send_changes unable to notify BLOB upload to remote host.");
+        network_result_cleanup(&res);
         return SQLITE_ERROR;
     }
     
@@ -786,7 +789,7 @@ int cloudsync_network_check_internal(sqlite3_context *context) {
     NETWORK_RESULT result = network_receive_buffer(data, endpoint, data->authentication, true, true, NULL, CLOUDSYNC_HEADER_SQLITECLOUD);
     int rc = SQLITE_OK;
     if (result.code == CLOUDSYNC_NETWORK_BUFFER) {
-        rc = network_download_changes (context, result.buffer);
+        rc = network_download_changes(context, result.buffer);
     } else {
         rc = network_set_sqlite_result(context, &result);
     }
