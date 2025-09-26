@@ -269,7 +269,7 @@ int close_db_v2 (sqlite3 *db) {
     return counter;
 }
 
-static bool file_delete (const char *path) {
+bool file_delete_internal (const char *path) {
     #ifdef _WIN32
     if (DeleteFile(path) == 0) return false;
     #else
@@ -2399,7 +2399,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -2530,7 +2530,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -2610,7 +2610,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -2712,7 +2712,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -2804,7 +2804,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -2899,7 +2899,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -3020,7 +3020,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -3119,7 +3119,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -3213,7 +3213,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -3332,7 +3332,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -3424,7 +3424,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -3518,7 +3518,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -3606,7 +3606,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -3734,7 +3734,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -3829,7 +3829,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -3921,7 +3921,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -4012,7 +4012,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -4121,7 +4121,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -4216,7 +4216,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -4343,7 +4343,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -4453,7 +4453,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -4589,7 +4589,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -4699,7 +4699,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -4818,7 +4818,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -4900,7 +4900,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -4946,7 +4946,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, test_counter);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     test_counter++;
@@ -5034,7 +5034,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -5131,7 +5131,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -5237,7 +5237,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
@@ -5354,7 +5354,7 @@ finalize:
         if (cleanup_databases) {
             char buf[256];
             do_build_database_path(buf, i, timestamp, saved_counter++);
-            file_delete(buf);
+            file_delete_internal(buf);
         }
     }
     return result;
