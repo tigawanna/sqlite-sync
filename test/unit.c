@@ -269,7 +269,7 @@ int close_db_v2 (sqlite3 *db) {
     return counter;
 }
 
-bool file_delete (const char *path) {
+static bool file_delete (const char *path) {
     #ifdef _WIN32
     if (DeleteFile(path) == 0) return false;
     #else
