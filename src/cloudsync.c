@@ -1514,6 +1514,7 @@ void *cloudsync_context_create (void) {
     DEBUG_SETTINGS("cloudsync_context_create %p", data);
     
     data->libversion = CLOUDSYNC_VERSION;
+    data->pending_db_version = CLOUDSYNC_VALUE_NOTSET;
     #if CLOUDSYNC_DEBUG
     data->debug = 1;
     #endif
@@ -2150,11 +2151,19 @@ int cloudsync_payload_apply (sqlite3_context *context, const char *payload, int 
         buffer = (const char *)clone;
     }
     
+    // apply payload inside a transaction
+    sqlite3 *db = sqlite3_context_db_handle(context);
+    int rc = sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+    if (rc != SQLITE_OK) {
+        dbutils_context_result_error(context, "Error on cloudsync_payload_apply: unable to start a transaction (%s).", sqlite3_errmsg(db));
+        if (clone) cloudsync_memory_free(clone);
+        return -1;
+    }
+    
     // precompile the insert statement
     sqlite3_stmt *vm = NULL;
-    sqlite3 *db = sqlite3_context_db_handle(context);
     const char *sql = "INSERT INTO cloudsync_changes(tbl, pk, col_name, col_value, col_version, db_version, site_id, cl, seq) VALUES (?,?,?,?,?,?,?,?,?);";
-    int rc = sqlite3_prepare(db, sql, -1, &vm, NULL);
+    rc = sqlite3_prepare(db, sql, -1, &vm, NULL);
     if (rc != SQLITE_OK) {
         dbutils_context_result_error(context, "Error on cloudsync_payload_apply: error while compiling SQL statement (%s).", sqlite3_errmsg(db));
         if (clone) cloudsync_memory_free(clone);
@@ -2197,8 +2206,11 @@ int cloudsync_payload_apply (sqlite3_context *context, const char *payload, int 
 
     char *lasterr = NULL;
     if (rc != SQLITE_OK && rc != SQLITE_DONE) lasterr = cloudsync_string_dup(sqlite3_errmsg(db), false);
+    (lasterr) ? sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL) : sqlite3_exec(db, "COMMIT;", NULL, NULL, NULL);
     
-    if (payload_apply_callback) payload_apply_callback(&payload_apply_xdata, &decoded_context, db, data, CLOUDSYNC_PAYLOAD_APPLY_CLEANUP, rc);
+    if (payload_apply_callback) {
+        payload_apply_callback(&payload_apply_xdata, &decoded_context, db, data, CLOUDSYNC_PAYLOAD_APPLY_CLEANUP, rc);
+    }
 
     if (rc == SQLITE_DONE) rc = SQLITE_OK;
     if (rc == SQLITE_OK) {
