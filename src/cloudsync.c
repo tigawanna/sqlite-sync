@@ -2153,7 +2153,7 @@ int cloudsync_payload_apply (sqlite3_context *context, const char *payload, int 
     
     // apply payload inside a transaction
     sqlite3 *db = sqlite3_context_db_handle(context);
-    int rc = sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+    int rc = sqlite3_exec(db, "SAVEPOINT cloudsync_payload_apply;", NULL, NULL, NULL);
     if (rc != SQLITE_OK) {
         dbutils_context_result_error(context, "Error on cloudsync_payload_apply: unable to start a transaction (%s).", sqlite3_errmsg(db));
         if (clone) cloudsync_memory_free(clone);
@@ -2204,9 +2204,9 @@ int cloudsync_payload_apply (sqlite3_context *context, const char *payload, int 
         stmt_reset(vm);
     }
 
-    char *lasterr = NULL;
-    if (rc != SQLITE_OK && rc != SQLITE_DONE) lasterr = cloudsync_string_dup(sqlite3_errmsg(db), false);
-    (lasterr) ? sqlite3_exec(db, "ROLLBACK;", NULL, NULL, NULL) : sqlite3_exec(db, "COMMIT;", NULL, NULL, NULL);
+    char *lasterr = (rc != SQLITE_OK && rc != SQLITE_DONE) ? cloudsync_string_dup(sqlite3_errmsg(db), false) : NULL;
+    sql = (lasterr) ? "ROLLBACK TO cloudsync_payload_apply;" : "RELEASE cloudsync_payload_apply;";
+    sqlite3_exec(db, sql, NULL, NULL, NULL);
     
     if (payload_apply_callback) {
         payload_apply_callback(&payload_apply_xdata, &decoded_context, db, data, CLOUDSYNC_PAYLOAD_APPLY_CLEANUP, rc);
