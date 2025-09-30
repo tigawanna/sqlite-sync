@@ -381,8 +381,6 @@ SELECT cloudsync_network_has_unsent_changes();
 
 **Returns:** None.
 
-**Errors:** See [Network Errors](#network-errors) for common error conditions.
-
 **Example:**
 
 ```sql
@@ -407,8 +405,6 @@ On success, it returns `SQLITE_OK`, and the return value indicates how many chan
 
 **Returns:** The number of changes downloaded. Errors are reported via the SQLite return code.
 
-**Errors:** See [Network Errors](#network-errors) for common error conditions.
-
 **Example:**
 
 ```sql
@@ -430,8 +426,6 @@ SELECT cloudsync_network_check_changes();
 - `max_retries` (INTEGER, optional): The maximum number of times to retry the synchronization. Defaults to 1.
 
 **Returns:** The number of changes downloaded. Errors are reported via the SQLite return code.
-
-**Errors:** See [Network Errors](#network-errors) for common error conditions.
 
 **Example:**
 
@@ -474,21 +468,3 @@ SELECT cloudsync_network_reset_sync_version();
 ```sql
 SELECT cloudsync_network_logout();
 ```
-
----
-
-### Network Errors
-
-Network functions may encounter specific errors during synchronization:
-
-#### Device Limit Exceeded
-
-If the device limit for your current plan on the cloud node is exceeded, network functions return error code `SQLITE_ERROR` (1) with the error message:
-
-```
-403 Device limit reached: You've already registered the maximum number of <n> devices allowed by your current plan.
-```
-
-**Resolution:** To resolve this error, you can:
-- [Upgrade to a higher plan](https://www.sqlite.ai/pricing) to increase your device limit
-- Remove unused devices from the OffSync section of your database in the [SQLite Cloud dashboard](https://dashboard.sqlitecloud.io/)
