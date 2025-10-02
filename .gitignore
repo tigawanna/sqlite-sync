@@ -1,17 +1,38 @@
-.DS_Store
+# Build artifacts
+build/
+/dist
+.build
+*.a
+*.sqlite
+/curl/src
+**/dist/**
+
+# Test artifacts
+/coverage
+unittest
+**/node_modules/**
+.env
+package-lock.json
+
+# iOS/macOS
 *.xcworkspacedata
 *.xcuserstate
 *.xcbkptlist
 *.plist
-/build
-**/dist/**
-/coverage
-*.sqlite
-*.a
-unittest
-/curl/src
+
+# Android
+.gradle/
+*.aar
+local.properties
+jniLibs/
+*.apk
+*.ap_
+*.dex
+
+# IDE
 .vscode
-**/node_modules/**
-.env
-package-lock.json
-.build
+.idea/
+*.iml
+
+# System
+.DS_Store

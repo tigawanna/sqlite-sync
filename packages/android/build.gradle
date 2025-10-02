@@ -1,0 +1,121 @@
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.5.2'
+    }
+}
+
+plugins {
+    id 'com.gradleup.nmcp.aggregation' version '1.2.0'
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'maven-publish'
+apply plugin: 'signing'
+
+android {
+    namespace 'ai.sqlite.sync'
+    compileSdk 34
+
+    defaultConfig {
+        minSdk 26
+        targetSdk 34
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['src/main/jniLibs']
+        }
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+    maven { url 'https://jitpack.io' }
+}
+
+dependencies {
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            release(MavenPublication) {
+                groupId = 'ai.sqlite'
+                artifactId = 'sync'
+                version = project.hasProperty('VERSION') ? project.VERSION : ['make', 'version'].execute(null, file('../..')).text.trim()
+
+                artifact("$buildDir/outputs/aar/android-release.aar")
+
+                // Maven Central metadata
+                pom {
+                    name = 'sqlite-sync'
+                    description = 'A multi-platform extension that brings a true local-first experience to your applications with minimal effort. It extends standard SQLite tables with built-in support for offline work and automatic synchronization, allowing multiple devices to operate independently—even without a network connection—and seamlessly stay in sync. With SQLite Sync, developers can easily build distributed, collaborative applications while continuing to rely on the simplicity, reliability, and performance of SQLite.'
+                    url = 'https://github.com/sqliteai/sqlite-sync'
+
+                    licenses {
+                        license {
+                            name = 'Elastic License 2.0'
+                            url = 'https://www.elastic.co/licensing/elastic-license'
+                        }
+                    }
+
+                    developers {
+                        developer {
+                            id = 'sqliteai'
+                            name = 'SQLite Cloud, Inc.'
+                            email = 'info@sqlitecloud.io'
+                            organization = 'SQLite Cloud, Inc.'
+                            organizationUrl = 'https://sqlite.ai'
+                        }
+                    }
+
+                    scm {
+                        connection = 'scm:git:git://github.com/sqliteai/sqlite-sync.git'
+                        developerConnection = 'scm:git:ssh://github.com:sqliteai/sqlite-sync.git'
+                        url = 'https://github.com/sqliteai/sqlite-sync/tree/main'
+                    }
+                }
+            }
+        }
+    }
+
+    // Signing configuration for Maven Central
+    signing {
+        required { project.hasProperty("SIGNING_KEY") }
+        if (project.hasProperty("SIGNING_KEY")) {
+            useInMemoryPgpKeys(
+                project.property("SIGNING_KEY").toString(),
+                project.property("SIGNING_PASSWORD").toString()
+            )
+            sign publishing.publications.release
+        }
+    }
+}
+
+// Maven Central publishing via NMCP aggregation
+nmcpAggregation {
+    if (project.hasProperty("SONATYPE_USERNAME") && project.hasProperty("SONATYPE_PASSWORD")) {
+        centralPortal {
+            username = project.property("SONATYPE_USERNAME")
+            password = project.property("SONATYPE_PASSWORD")
+            publishingType = "AUTOMATIC"
+        }
+        publishAllProjectsProbablyBreakingProjectIsolation()
+    }
+}
