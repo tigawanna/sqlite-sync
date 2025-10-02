@@ -346,6 +346,17 @@ $(DIST_DIR)/%.xcframework: $(LIB_NAMES)
 
 xcframework: $(DIST_DIR)/CloudSync.xcframework
 
+AAR_ARM = packages/android/src/main/jniLibs/arm64-v8a/
+AAR_X86 = packages/android/src/main/jniLibs/x86_64/
+aar:
+	mkdir -p $(AAR_ARM) $(AAR_X86)
+	$(MAKE) clean && $(MAKE) PLATFORM=android ARCH=arm64-v8a
+	mv $(DIST_DIR)/cloudsync.so $(AAR_ARM)
+	$(MAKE) clean && $(MAKE) PLATFORM=android ARCH=x86_64
+	mv $(DIST_DIR)/cloudsync.so $(AAR_X86)
+	cd packages/android && ./gradlew clean assembleRelease
+	cp packages/android/build/outputs/aar/android-release.aar $(DIST_DIR)/cloudsync.aar
+
 # Tools
 version:
 	@echo $(shell sed -n 's/^#define CLOUDSYNC_VERSION[[:space:]]*"\([^"]*\)".*/\1/p' src/cloudsync.h)
@@ -373,5 +384,7 @@ help:
 	@echo "  clean	 				- Remove built files"
 	@echo "  test [COVERAGE=true]	- Test the extension with optional coverage output"
 	@echo "  help	  				- Display this help message"
+	@echo "  xcframework			- Build the Apple XCFramework"
+	@echo "  aar					- Build the Android AAR package"
 
-.PHONY: all clean test extension help version xcframework
+.PHONY: all clean test extension help version xcframework aar
