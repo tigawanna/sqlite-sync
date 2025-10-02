@@ -348,12 +348,14 @@ xcframework: $(DIST_DIR)/CloudSync.xcframework
 
 AAR_ARM = packages/android/src/main/jniLibs/arm64-v8a/
 AAR_X86 = packages/android/src/main/jniLibs/x86_64/
+AAR_USR = $(ANDROID_NDK)/toolchains/llvm/prebuilt/$(HOST)-x86_64/sysroot/usr/
+AAR_CLEAN = rm -rf $(CURL_DIR)/android $(AAR_USR)bin/openssl $(AAR_USR)include/openssl $(AAR_USR)lib/libssl.a $(AAR_USR)lib/libcrypto.a $(AAR_USR)lib/ossl-modules
 aar:
 	mkdir -p $(AAR_ARM) $(AAR_X86)
-	rm -rf $(CURL_DIR)/android $(ANDROID_NDK)/toolchains/llvm/prebuilt/$(HOST)-x86_64/sysroot/usr/bin/openssl $(ANDROID_NDK)/toolchains/llvm/prebuilt/$(HOST)-x86_64/sysroot/usr/include/openssl $(ANDROID_NDK)/toolchains/llvm/prebuilt/$(HOST)-x86_64/sysroot/usr/lib/libssl.* $(ANDROID_NDK)/toolchains/llvm/prebuilt/$(HOST)-x86_64/sysroot/usr/lib/libcrypto.*
+	$(AAR_CLEAN)
 	$(MAKE) clean && $(MAKE) PLATFORM=android ARCH=arm64-v8a
 	mv $(DIST_DIR)/cloudsync.so $(AAR_ARM)
-	rm -rf $(CURL_DIR)/android $(ANDROID_NDK)/toolchains/llvm/prebuilt/$(HOST)-x86_64/sysroot/usr/bin/openssl $(ANDROID_NDK)/toolchains/llvm/prebuilt/$(HOST)-x86_64/sysroot/usr/include/openssl $(ANDROID_NDK)/toolchains/llvm/prebuilt/$(HOST)-x86_64/sysroot/usr/lib/libssl.* $(ANDROID_NDK)/toolchains/llvm/prebuilt/$(HOST)-x86_64/sysroot/usr/lib/libcrypto.*
+	$(AAR_CLEAN)
 	$(MAKE) clean && $(MAKE) PLATFORM=android ARCH=x86_64
 	mv $(DIST_DIR)/cloudsync.so $(AAR_X86)
 	cd packages/android && ./gradlew clean assembleRelease
