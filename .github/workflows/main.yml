@@ -340,13 +340,82 @@ jobs:
         if: steps.tag.outputs.version != ''
         run: cd packages/android && ./gradlew publishAggregationToCentralPortal -PSIGNING_KEY="${{ secrets.SIGNING_KEY }}" -PSIGNING_PASSWORD="${{ secrets.SIGNING_PASSWORD }}" -PSONATYPE_USERNAME="${{ secrets.MAVEN_CENTRAL_USERNAME }}" -PSONATYPE_PASSWORD="${{ secrets.MAVEN_CENTRAL_TOKEN }}" -PVERSION="${{ steps.tag.outputs.version }}" -PAAR_PATH="../../artifacts/cloudsync-android-aar/cloudsync.aar"
 
+      - uses: actions/setup-node@v4
+        if: steps.tag.outputs.version != ''
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: build and publish npm packages
+        if: steps.tag.outputs.version != ''
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd packages/node
+
+          # Update version in package.json
+          echo "Updating versions to ${{ steps.tag.outputs.version }}..."
+
+          # Update package.json
+          jq --arg version "${{ steps.tag.outputs.version }}" \
+            '.version = $version | .optionalDependencies = (.optionalDependencies | with_entries(.value = $version))' \
+            package.json > package.tmp.json && mv package.tmp.json package.json
+
+          echo "✓ Updated package.json to version ${{ steps.tag.outputs.version }}"
+
+          # Generate platform packages
+          echo "Generating platform packages..."
+          node generate-platform-packages.js "${{ steps.tag.outputs.version }}" "../../artifacts" "./platform-packages"
+          echo "✓ Generated 7 platform packages"
+          ls -la platform-packages/
+
+          # Build main package
+          echo "Building main package..."
+          npm install
+          npm run build
+          npm test
+          echo "✓ Main package built and tested"
+
+          # Publish platform packages
+          echo "Publishing platform packages to npm..."
+          cd platform-packages
+          for platform_dir in */; do
+            platform_name=$(basename "$platform_dir")
+            echo "  Publishing @sqliteai/sqlite-sync-${platform_name}..."
+            cd "$platform_dir"
+            npm publish --access public
+            # TODO: Add --provenance flag after switching to OIDC (requires package to exist first)
+            cd ..
+            echo "  ✓ Published @sqliteai/sqlite-sync-${platform_name}"
+          done
+          cd ..
+
+          # Publish main package
+          echo "Publishing main package to npm..."
+          npm publish --access public
+          # TODO: Add --provenance flag after switching to OIDC (requires package to exist first)
+          echo "✓ Published @sqliteai/sqlite-sync@${{ steps.tag.outputs.version }}"
+
+          echo ""
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ Successfully published 8 packages to npm"
+          echo "   Main: @sqliteai/sqlite-sync@${{ steps.tag.outputs.version }}"
+          echo "   Platform packages: 7"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
       - uses: softprops/action-gh-release@v2.2.1
         if: steps.tag.outputs.version != ''
         with:
           body: |
-            # WASM Releases
-            **WASM repository**: [sqlite-wasm](https://github.com/sqliteai/sqlite-wasm)
-            **WASM package** is available on npm: [@sqliteai/sqlite-wasm](https://www.npmjs.com/package/@sqliteai/sqlite-wasm)
+            # Packages
+
+            [**Node**](https://www.npmjs.com/package/@sqliteai/sqlite-sync): `npm install @sqliteai/sqlite-sync`
+            [**WASM**](https://www.npmjs.com/package/@sqliteai/sqlite-wasm): `npm install @sqliteai/sqlite-wasm`
+            [**Android**](https://central.sonatype.com/artifact/ai.sqlite/sync): `ai.sqlite:sync:${{ steps.tag.outputs.version }}`
+            [**Swift**](https://github.com/sqliteai/sqlite-sync#swift-package): [Installation Guide](https://github.com/sqliteai/sqlite-sync#swift-package)
+
+            ---
+
           generate_release_notes: true
           tag_name: ${{ steps.tag.outputs.version }}
           files: |

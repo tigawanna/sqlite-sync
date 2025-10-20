@@ -1,0 +1,70 @@
+{
+  "name": "@sqliteai/sqlite-sync",
+  "version": "0.8.53",
+  "description": "SQLite Sync extension for Node.js - Sync on-device databases with the cloud",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "prepublishOnly": "npm run build",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit",
+    "generate-platforms": "node generate-platform-packages.js"
+  },
+  "keywords": [
+    "sqlite",
+    "sync",
+    "cloud",
+    "replication",
+    "offline-first",
+    "database-sync",
+    "sqlite-extension"
+  ],
+  "author": "Gioele Cantoni (gioele@sqlitecloud.io)",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sqliteai/sqlite-sync.git",
+    "directory": "packages/node"
+  },
+  "homepage": "https://github.com/sqliteai/sqlite-sync#readme",
+  "bugs": {
+    "url": "https://github.com/sqliteai/sqlite-sync/issues"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "optionalDependencies": {
+    "@sqliteai/sqlite-sync-darwin-arm64": "0.8.53",
+    "@sqliteai/sqlite-sync-darwin-x86_64": "0.8.53",
+    "@sqliteai/sqlite-sync-linux-arm64": "0.8.53",
+    "@sqliteai/sqlite-sync-linux-arm64-musl": "0.8.53",
+    "@sqliteai/sqlite-sync-linux-x86_64": "0.8.53",
+    "@sqliteai/sqlite-sync-linux-x86_64-musl": "0.8.53",
+    "@sqliteai/sqlite-sync-win32-x86_64": "0.8.53"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^3.2.4"
+  }
+}

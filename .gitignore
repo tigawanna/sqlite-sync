@@ -1,18 +1,28 @@
 # Build artifacts
 build/
-/dist
+dist/
 .build
 *.a
 *.sqlite
 /curl/src
-**/dist/**
 
 # Test artifacts
 /coverage
 unittest
-**/node_modules/**
 .env
+
+# Node.js
+**/node_modules/**
 package-lock.json
+*.tsbuildinfo
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+packages/node/platform-packages/
+packages/node/test-artifacts/
+packages/node/test-output/
+packages/node/test-platform-packages/
 
 # iOS/macOS
 *.xcworkspacedata
@@ -33,6 +43,9 @@ jniLibs/
 .vscode
 .idea/
 *.iml
+*.swp
+*.swo
 
 # System
 .DS_Store
+Thumbs.db
