@@ -98,7 +98,7 @@ function generatePackageJson(platform, version) {
       'sync',
       ...platform.name.split('-'),
     ],
-    author: 'SQLite Cloud, Inc.',
+    author: 'Gioele Cantoni (gioele@sqlitecloud.io)',
     license: 'SEE LICENSE IN LICENSE.md',
     repository: {
       type: 'git',
